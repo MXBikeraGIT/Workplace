@@ -1,0 +1,115 @@
+name: Combine DXVK WCPs (Sarek + Async)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Download first WCP (dxvk-1.10.3-async)
+        run: |
+          curl -L -o dxvk-async.wcp "https://github.com/StevenMXZ/Winlator-Contents/blob/main/DXVK/dxvk-1.10.3-async.wcp?raw=true"
+
+      - name: Download second WCP (dxvk-sarek-dyasync-1.12.0)
+        run: |
+          curl -L -o dxvk-sarek.wcp "https://github.com/Arihany/WinlatorWCPHub/releases/download/DXVK-SAREK-ASYNC/dxvk-sarek-dyasync-1.12.0.wcp"
+
+      - name: Extract first WCP (async) to get syswow64 DLLs
+        run: |
+          # Decompress the .wcp (zstd) to get the inner .tar
+          zstd -d dxvk-async.wcp -o async.tar
+          # Extract the tar to a directory
+          mkdir async_extracted
+          tar -xf async.tar -C async_extracted
+          # The extracted directory should contain a folder like syswow64 (or maybe x32)
+          # We'll assume the DLLs are in syswow64 (common for 32-bit)
+          mkdir -p combined/syswow64
+          if [ -d async_extracted/syswow64 ]; then
+            cp async_extracted/syswow64/*.dll combined/syswow64/ 2>/dev/null || true
+          elif [ -d async_extracted/x32 ]; then
+            cp async_extracted/x32/*.dll combined/syswow64/ 2>/dev/null || true
+          else
+            # Fallback: find any .dll and copy
+            find async_extracted -name "*.dll" -exec cp {} combined/syswow64/ \;
+          fi
+          ls -la combined/syswow64/
+
+      - name: Extract second WCP (sarek) to get system32 DLLs
+        run: |
+          zstd -d dxvk-sarek.wcp -o sarek.tar
+          mkdir sarek_extracted
+          tar -xf sarek.tar -C sarek_extracted
+          mkdir -p combined/system32
+          if [ -d sarek_extracted/system32 ]; then
+            cp sarek_extracted/system32/*.dll combined/system32/ 2>/dev/null || true
+          elif [ -d sarek_extracted/x64 ]; then
+            cp sarek_extracted/x64/*.dll combined/system32/ 2>/dev/null || true
+          else
+            find sarek_extracted -name "*.dll" -exec cp {} combined/system32/ \;
+          fi
+          ls -la combined/system32/
+
+      - name: Create profile.json
+        run: |
+          cat > combined/profile.json << 'EOF'
+          {
+            "type": "DXVK",
+            "versionName": "DXVK-MD",
+            "versionCode": 1,
+            "description": "combination of sarek 1.12.0 and Dxvk async arm64ec 1.10.3",
+            "files": [
+              {
+                "source": "system32/d3d9.dll",
+                "target": "${system32}/d3d9.dll"
+              },
+              {
+                "source": "system32/d3d10core.dll",
+                "target": "${system32}/d3d10core.dll"
+              },
+              {
+                "source": "system32/d3d11.dll",
+                "target": "${system32}/d3d11.dll"
+              },
+              {
+                "source": "system32/dxgi.dll",
+                "target": "${system32}/dxgi.dll"
+              },
+              {
+                "source": "syswow64/d3d9.dll",
+                "target": "${syswow64}/d3d9.dll"
+              },
+              {
+                "source": "syswow64/d3d10core.dll",
+                "target": "${syswow64}/d3d10core.dll"
+              },
+              {
+                "source": "syswow64/d3d11.dll",
+                "target": "${syswow64}/d3d11.dll"
+              },
+              {
+                "source": "syswow64/dxgi.dll",
+                "target": "${syswow64}/dxgi.dll"
+              }
+            ]
+          }
+          EOF
+
+      - name: Package into new .wcp
+        run: |
+          # Create inner tar
+          tar -cf dxvk-md.tar -C combined .
+          # Compress with zstd to .wcp
+          zstd -o dxvk-md.wcp dxvk-md.tar
+          # Clean up
+          rm -f async.tar sarek.tar dxvk-md.tar
+          ls -la dxvk-md.wcp
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DXVK-MD
+          path: dxvk-md.wcp
