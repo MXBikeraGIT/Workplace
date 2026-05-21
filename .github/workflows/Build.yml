@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y xz-utils
+        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils
 
       - name: Download first WCP (dxvk-1.10.3-async)
         run: |
@@ -20,9 +20,9 @@ jobs:
 
       - name: Extract first WCP (async) to get syswow64 DLLs
         run: |
-          # Extract the tar.xz archive directly
+          zstd -d dxvk-async.wcp -c > async.tar
           mkdir async_extracted
-          tar -xJf dxvk-async.wcp -C async_extracted
+          tar -xf async.tar -C async_extracted
           mkdir -p combined/syswow64
           if [ -d async_extracted/syswow64 ]; then
             cp async_extracted/syswow64/*.dll combined/syswow64/ 2>/dev/null || true
@@ -35,8 +35,9 @@ jobs:
 
       - name: Extract second WCP (sarek) to get system32 DLLs
         run: |
+          zstd -d dxvk-sarek.wcp -c > sarek.tar
           mkdir sarek_extracted
-          tar -xJf dxvk-sarek.wcp -C sarek_extracted
+          tar -xf sarek.tar -C sarek_extracted
           mkdir -p combined/system32
           if [ -d sarek_extracted/system32 ]; then
             cp sarek_extracted/system32/*.dll combined/system32/ 2>/dev/null || true
@@ -94,11 +95,9 @@ jobs:
 
       - name: Package into new .wcp (tar.xz)
         run: |
-          # Create inner tar
           tar -cf MD.tar -C combined .
-          # Compress with xz to .wcp
           xz -z -c MD.tar > DXVK-MD.wcp
-          rm -f MD.tar
+          rm -f async.tar sarek.tar MD.tar
           ls -la DXVK-MD.wcp
 
       - name: Upload artifact
