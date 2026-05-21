@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y zstd xz-utils
+        run: sudo apt-get update && sudo apt-get install -y xz-utils
 
       - name: Download first WCP (dxvk-1.10.3-async)
         run: |
@@ -20,7 +20,8 @@ jobs:
 
       - name: Extract first WCP (async) to get syswow64 DLLs
         run: |
-          zstd -d dxvk-async.wcp -c > async.tar
+          # Decompress the .wcp (XZ) to get inner tar
+          xz -d dxvk-async.wcp -c > async.tar
           mkdir async_extracted
           tar -xf async.tar -C async_extracted
           mkdir -p combined/syswow64
@@ -35,7 +36,7 @@ jobs:
 
       - name: Extract second WCP (sarek) to get system32 DLLs
         run: |
-          zstd -d dxvk-sarek.wcp -c > sarek.tar
+          xz -d dxvk-sarek.wcp -c > sarek.tar
           mkdir sarek_extracted
           tar -xf sarek.tar -C sarek_extracted
           mkdir -p combined/system32
